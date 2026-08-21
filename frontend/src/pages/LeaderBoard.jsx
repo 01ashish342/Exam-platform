@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import api from "../api/axios";
 
 export default function Leaderboard() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [rows, setRows] = useState([]);
 
   useEffect(() => {
@@ -24,6 +25,7 @@ export default function Leaderboard() {
             <th>Score</th>
             <th>Accuracy</th>
             <th>Total Time (s)</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -34,11 +36,16 @@ export default function Leaderboard() {
               <td>{r.score}</td>
               <td>{r.accuracy}%</td>
               <td>{r.totalTimeSec}</td>
+              <td>
+                <button onClick={() => navigate(`/result/${r.attemptId}`)}>
+                  View Details
+                </button>
+              </td>
             </tr>
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan="5">No attempts yet.</td>
+              <td colSpan="6">No attempts yet.</td>
             </tr>
           )}
         </tbody>

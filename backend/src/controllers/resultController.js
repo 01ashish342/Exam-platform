@@ -1,8 +1,9 @@
 const prisma = require("../config/db");
 
 // @route GET /api/results/:attemptId
-// Full breakdown: overall score/accuracy/time + per-question detail
-// (selected option, correct option, correct/wrong/skipped, time taken).
+// Full breakdown: overall score/accuracy/time + per-question detail.
+// Handles all four question types — SINGLE_CORRECT, MULTI_CORRECT,
+// TRUE_FALSE (all via options/isCorrect) and FILL_BLANK (via answerText).
 const getResult = async (req, res, next) => {
   try {
     const { attemptId } = req.params;
@@ -12,8 +13,7 @@ const getResult = async (req, res, next) => {
         exam: true,
         responses: {
           include: {
-            question: { include: { options: true } },
-            selectedOption: true,
+            selectedOptions: { include: { option: true } },
           },
         },
       },
@@ -29,7 +29,7 @@ const getResult = async (req, res, next) => {
     // All questions of the exam, so skipped ones show up too (they have no Response row)
     const allQuestions = await prisma.question.findMany({
       where: { examId: attempt.examId },
-      include: { options: true },
+      include: { options: { orderBy: { order: "asc" } } },
       orderBy: { order: "asc" },
     });
 
@@ -37,17 +37,25 @@ const getResult = async (req, res, next) => {
 
     const questionBreakdown = allQuestions.map((q) => {
       const r = responseByQ.get(q.id);
-      const correctOption = q.options.find((o) => o.id === q.correctOptionId);
+      const correctOptions = q.options.filter((o) => o.isCorrect);
+      const selectedOptions = r ? r.selectedOptions.map((so) => so.option) : [];
+
+      const hasAnswer =
+        q.type === "FILL_BLANK" ? Boolean(r?.answerText) : selectedOptions.length > 0;
+
       return {
         questionId: q.id,
         questionText: q.questionText,
+        type: q.type,
         section: q.section,
-        options: q.options.map((o) => ({ id: o.id, text: o.text })),
-        correctOptionId: q.correctOptionId,
-        correctOptionText: correctOption ? correctOption.text : null,
-        selectedOptionId: r ? r.selectedOptionId : null,
-        selectedOptionText: r && r.selectedOption ? r.selectedOption.text : null,
-        status: !r || !r.selectedOptionId ? "skipped" : r.isCorrect ? "correct" : "wrong",
+        options: q.type === "FILL_BLANK" ? [] : q.options.map((o) => ({ id: o.id, text: o.text })),
+        correctOptionIds: correctOptions.map((o) => o.id),
+        correctOptionTexts: correctOptions.map((o) => o.text),
+        correctAnswerText: q.type === "FILL_BLANK" ? q.correctAnswerText : null,
+        selectedOptionIds: selectedOptions.map((o) => o.id),
+        selectedOptionTexts: selectedOptions.map((o) => o.text),
+        answerText: r ? r.answerText : null,
+        status: !r || !hasAnswer ? "skipped" : r.isCorrect ? "correct" : "wrong",
         timeTakenSec: r ? r.timeTakenSec : 0,
       };
     });
@@ -81,8 +89,8 @@ const getResult = async (req, res, next) => {
 };
 
 // @route GET /api/results/exam/:examId/leaderboard
-// Ranked list — score desc, then total time asc (faster = better tiebreak),
-// which mirrors how most competitive-exam selection processes rank candidates.
+// Ranked list — score desc, then total time asc (faster = better tiebreak).
+// Unaffected by question types since it only reads Attempt-level totals.
 const getLeaderboard = async (req, res, next) => {
   try {
     const { examId } = req.params;
@@ -94,6 +102,7 @@ const getLeaderboard = async (req, res, next) => {
 
     const leaderboard = attempts.map((a, idx) => ({
       rank: idx + 1,
+      attemptId: a.id,
       userName: a.user.name,
       score: a.totalScore,
       accuracy: a.accuracy,

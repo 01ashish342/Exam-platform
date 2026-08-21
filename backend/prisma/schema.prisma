@@ -18,6 +18,13 @@ enum AttemptStatus {
   AUTO_SUBMITTED
 }
 
+enum QuestionType {
+  SINGLE_CORRECT
+  MULTI_CORRECT
+  TRUE_FALSE
+  FILL_BLANK
+}
+
 model User {
   id        String    @id @default(uuid())
   name      String
@@ -46,25 +53,38 @@ model Exam {
 }
 
 model Question {
-  id              String     @id @default(uuid())
-  exam            Exam       @relation(fields: [examId], references: [id], onDelete: Cascade)
-  examId          String
-  questionText    String
-  options         Option[]
-  correctOption   Option?    @relation("CorrectOption", fields: [correctOptionId], references: [id])
-  correctOptionId String?    @unique
-  order           Int        @default(0)
-  section         String?
-  responses       Response[]
+  id     String       @id @default(uuid())
+  exam   Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
+  examId String
+
+  type QuestionType @default(SINGLE_CORRECT)
+
+  questionText String
+  options      Option[]
+
+  // Used only when type == FILL_BLANK.
+  // Pipe-separated accepted answers, e.g. "colour|color"
+  correctAnswerText String?
+
+  order     Int        @default(0)
+  section   String?
+  responses Response[]
 }
 
 model Option {
-  id         String     @id @default(uuid())
-  question   Question   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  id         String @id @default(uuid())
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
   questionId String
   text       String
-  correctFor Question?  @relation("CorrectOption")
-  responses  Response[]
+
+  // Replaces the old single correctOptionId relation on Question.
+  // SINGLE_CORRECT / TRUE_FALSE: exactly one option has isCorrect = true.
+  // MULTI_CORRECT: one or more options can have isCorrect = true.
+  isCorrect Boolean @default(false)
+
+  order Int @default(0)
+
+  responses ResponseOption[]
 }
 
 model Attempt {
@@ -88,16 +108,33 @@ model Attempt {
 }
 
 model Response {
-  id                String    @id @default(uuid())
-  attempt           Attempt   @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-  attemptId         String
-  question          Question  @relation(fields: [questionId], references: [id])
-  questionId        String
-  selectedOption    Option?   @relation(fields: [selectedOptionId], references: [id])
-  selectedOptionId  String?
-  isCorrect         Boolean?
-  timeTakenSec      Int       @default(0)
-  answeredAt        DateTime?
+  id         String   @id @default(uuid())
+  attempt    Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  attemptId  String
+  question   Question @relation(fields: [questionId], references: [id])
+  questionId String
+
+  // SINGLE_CORRECT / MULTI_CORRECT / TRUE_FALSE answers
+  selectedOptions ResponseOption[]
+
+  // FILL_BLANK answer
+  answerText String?
+
+  isCorrect    Boolean?
+  timeTakenSec Int       @default(0)
+  answeredAt   DateTime?
 
   @@unique([attemptId, questionId])
+}
+
+// Join table: lets one Response point at 1..N options.
+// MULTI_CORRECT needs this; SINGLE_CORRECT/TRUE_FALSE just use one row.
+model ResponseOption {
+  id         String   @id @default(uuid())
+  response   Response @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  responseId String
+  option     Option   @relation(fields: [optionId], references: [id])
+  optionId   String
+
+  @@unique([responseId, optionId])
 }
