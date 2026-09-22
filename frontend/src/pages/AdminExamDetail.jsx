@@ -34,6 +34,12 @@ export default function AdminExamDetail() {
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
 
+  // --- Rename / edit exam details state ---
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState("");
+
   const load = async () => {
     try {
       setLoading(true);
@@ -54,6 +60,62 @@ export default function AdminExamDetail() {
   useEffect(() => {
     load();
   }, [id]);
+
+  const startEditing = () => {
+    setEditForm({
+      title: exam.title || "",
+      description: exam.description || "",
+      durationMinutes: exam.durationMinutes,
+      marksPerQ: exam.marksPerQ,
+      negativeMarks: exam.negativeMarks,
+    });
+    setEditError("");
+    setEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setEditing(false);
+    setEditForm(null);
+    setEditError("");
+  };
+
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    setEditForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+
+    if (!editForm.title.trim()) {
+      setEditError("Exam title cannot be empty.");
+      return;
+    }
+
+    try {
+      setSavingEdit(true);
+      setEditError("");
+
+      const { data } = await api.put(`/exams/${id}`, {
+        title: editForm.title.trim(),
+        description: editForm.description,
+        durationMinutes: Number(editForm.durationMinutes),
+        marksPerQ: Number(editForm.marksPerQ),
+        negativeMarks: Number(editForm.negativeMarks),
+      });
+
+      setExam((prev) => ({ ...prev, ...data }));
+      setEditing(false);
+      setEditForm(null);
+    } catch (err) {
+      setEditError(
+        err?.response?.data?.message ||
+          "Unable to save changes. Please try again."
+      );
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   const handleTypeChange = (type) => {
     setForm((prev) => {
@@ -291,9 +353,30 @@ export default function AdminExamDetail() {
           )}
         </div>
 
-        <Link to="/admin" className="btn btn-secondary">
-          Back to Exams
-        </Link>
+        <div className="detail-header-actions">
+          {!exam.isPublished && !editing && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={startEditing}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+              Edit Details
+            </button>
+          )}
+
+          <Link to="/admin" className="btn btn-secondary">
+            Back to Exams
+          </Link>
+        </div>
       </div>
 
       {error && (
@@ -304,6 +387,128 @@ export default function AdminExamDetail() {
             Retry
           </button>
         </div>
+      )}
+
+      {/* Edit exam details (title / description / duration / marks) — DRAFT ONLY */}
+      {editing && (
+        <section className="create-exam-section">
+          {editError && (
+            <div className="dashboard-error" role="alert">
+              <span className="error-icon">!</span>
+              <span>{editError}</span>
+            </div>
+          )}
+
+          <form className="create-exam-card" onSubmit={handleSaveEdit}>
+            <div className="form-field form-field-full">
+              <label htmlFor="edit-title">
+                Exam Title
+                <span>*</span>
+              </label>
+
+              <input
+                id="edit-title"
+                name="title"
+                type="text"
+                value={editForm.title}
+                onChange={handleEditChange}
+                required
+              />
+            </div>
+
+            <div className="form-field form-field-full">
+              <label htmlFor="edit-description">Description</label>
+
+              <textarea
+                id="edit-description"
+                name="description"
+                value={editForm.description}
+                onChange={handleEditChange}
+                rows={3}
+              />
+            </div>
+
+            <div className="exam-settings-grid">
+              <div className="form-field">
+                <label htmlFor="edit-durationMinutes">
+                  Duration
+                  <span>*</span>
+                </label>
+
+                <div className="input-with-suffix">
+                  <input
+                    id="edit-durationMinutes"
+                    name="durationMinutes"
+                    type="number"
+                    min="1"
+                    value={editForm.durationMinutes}
+                    onChange={handleEditChange}
+                    required
+                  />
+                  <span>min</span>
+                </div>
+              </div>
+
+              <div className="form-field">
+                <label htmlFor="edit-marksPerQ">
+                  Marks / Question
+                  <span>*</span>
+                </label>
+
+                <input
+                  id="edit-marksPerQ"
+                  name="marksPerQ"
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={editForm.marksPerQ}
+                  onChange={handleEditChange}
+                  required
+                />
+              </div>
+
+              <div className="form-field">
+                <label htmlFor="edit-negativeMarks">Negative Marks</label>
+
+                <input
+                  id="edit-negativeMarks"
+                  name="negativeMarks"
+                  type="number"
+                  min="0"
+                  step="0.25"
+                  value={editForm.negativeMarks}
+                  onChange={handleEditChange}
+                />
+              </div>
+            </div>
+
+            <div className="form-footer">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={cancelEditing}
+                disabled={savingEdit}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                className="btn create-exam-btn"
+                disabled={savingEdit}
+              >
+                {savingEdit ? (
+                  <>
+                    <span className="button-spinner" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Changes"
+                )}
+              </button>
+            </div>
+          </form>
+        </section>
       )}
 
       {/* Exam stats */}

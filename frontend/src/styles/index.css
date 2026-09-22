@@ -3086,6 +3086,12 @@ button:disabled {
   color: var(--primary);
 }
 
+.back-link svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
 .title-row {
   display: flex;
   align-items: center;
@@ -8639,5 +8645,198 @@ button:disabled {
   .type-tab {
     padding: 8px 12px;
     font-size: 11px;
+  }
+}
+
+/* =========================================================
+   FIX: Edit Details / Back to Exams buttons
+   (.detail-header-actions was used in AdminExamDetail.jsx
+   but never defined in the stylesheet, so the buttons had
+   no gap, no icon sizing, and the text was free to wrap
+   onto two lines.)
+========================================================= */
+
+.detail-header-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+
+  gap: 10px;
+}
+
+.detail-header-actions .btn {
+  white-space: nowrap;
+}
+
+.detail-header-actions .btn svg {
+  width: 15px;
+  height: 15px;
+
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .detail-header-actions {
+    width: 100%;
+
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .detail-header-actions .btn {
+    width: 100%;
+  }
+}
+
+/* =========================================
+   EXAM SEARCH TOOLBAR
+   Apni existing stylesheet ke end me paste kar do.
+========================================= */
+
+.exam-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+/* ---------- Search input ---------- */
+
+.exam-search {
+  position: relative;
+  flex: 1 1 320px;
+  min-width: 240px;
+  display: flex;
+  align-items: center;
+}
+
+.exam-search-icon {
+  position: absolute;
+  left: 14px;
+  width: 18px;
+  height: 18px;
+  color: #8b8b9a;
+  pointer-events: none;
+}
+
+.exam-search input {
+  width: 100%;
+  padding: 12px 40px 12px 42px;
+  font: inherit;
+  font-size: 0.95rem;
+  color: inherit;
+  background: #fff;
+  border: 1px solid #e2e2ea;
+  border-radius: 10px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.exam-search input::placeholder {
+  color: #9a9aa8;
+}
+
+.exam-search input:focus {
+  border-color: #6c5ce7;
+  box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.15);
+}
+
+/* Browser ka default "search" cross hide, apna button use ho raha hai */
+.exam-search input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.exam-search-clear {
+  position: absolute;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: #8b8b9a;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.exam-search-clear:hover {
+  color: #2d2d3a;
+  background: #f1f1f6;
+}
+
+.exam-search-clear svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---------- Status filter ---------- */
+
+.exam-filter-group {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: #f1f1f6;
+  border-radius: 10px;
+}
+
+.exam-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #5c5c6b;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.exam-filter-btn:hover {
+  color: #2d2d3a;
+}
+
+.exam-filter-btn.is-active {
+  color: #2d2d3a;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(20, 20, 40, 0.08);
+}
+
+.exam-filter-count {
+  padding: 1px 7px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b6b7b;
+  background: rgba(20, 20, 40, 0.07);
+  border-radius: 999px;
+}
+
+.exam-filter-btn.is-active .exam-filter-count {
+  color: #6c5ce7;
+  background: rgba(108, 92, 231, 0.12);
+}
+
+/* ---------- Mobile ---------- */
+
+@media (max-width: 600px) {
+  .exam-search {
+    flex-basis: 100%;
+  }
+
+  .exam-filter-group {
+    width: 100%;
+  }
+
+  .exam-filter-btn {
+    flex: 1;
+    justify-content: center;
+    padding: 8px 10px;
   }
 }

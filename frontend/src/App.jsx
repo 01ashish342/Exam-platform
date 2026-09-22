@@ -9,6 +9,7 @@ import Result from "./pages/Result";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminExamDetail from "./pages/AdminExamDetail";
 import Leaderboard from "./pages/Leaderboard";
+import CreateExam from "./pages/CreateExam";
 
 export default function App() {
   return (
@@ -48,6 +49,14 @@ export default function App() {
           element={
             <ProtectedRoute role="ADMIN">
               <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/create-exam"
+          element={
+            <ProtectedRoute role="ADMIN">
+              <CreateExam />
             </ProtectedRoute>
           }
         />

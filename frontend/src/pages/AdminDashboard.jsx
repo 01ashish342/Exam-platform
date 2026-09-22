@@ -1,23 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/axios";
 
-const INITIAL_FORM = {
-  title: "",
-  description: "",
-  durationMinutes: 30,
-  marksPerQ: 1,
-  negativeMarks: 0,
-};
-
 export default function AdminDashboard() {
   const [exams, setExams] = useState([]);
-  const [form, setForm] = useState(INITIAL_FORM);
 
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
   const [publishingId, setPublishingId] = useState(null);
   const [error, setError] = useState("");
+
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const searchRef = useRef(null);
 
   const load = async () => {
     try {
@@ -39,41 +34,21 @@ export default function AdminDashboard() {
     load();
   }, []);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
+  // Press "/" anywhere to jump into the search box.
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key !== "/") return;
 
-    setForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+      const tag = document.activeElement?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
 
-  const handleCreate = async (e) => {
-    e.preventDefault();
+      event.preventDefault();
+      searchRef.current?.focus();
+    };
 
-    try {
-      setCreating(true);
-      setError("");
-
-      await api.post("/exams", {
-        ...form,
-        durationMinutes: Number(form.durationMinutes),
-        marksPerQ: Number(form.marksPerQ),
-        negativeMarks: Number(form.negativeMarks),
-      });
-
-      setForm(INITIAL_FORM);
-
-      await load();
-    } catch (err) {
-      setError(
-        err?.response?.data?.message ||
-          "Unable to create the exam. Please try again."
-      );
-    } finally {
-      setCreating(false);
-    }
-  };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const handlePublish = async (id) => {
     try {
@@ -101,6 +76,37 @@ export default function AdminDashboard() {
     0
   );
 
+  /* =========================================
+     SEARCH + FILTER
+  ========================================= */
+
+  const normalizedQuery = query.trim().toLowerCase();
+
+  const filteredExams = useMemo(() => {
+    const words = normalizedQuery ? normalizedQuery.split(/\s+/) : [];
+
+    return exams.filter((exam) => {
+      if (statusFilter === "published" && !exam.isPublished) return false;
+      if (statusFilter === "draft" && exam.isPublished) return false;
+
+      if (words.length === 0) return true;
+
+      const haystack = `${exam.title || ""} ${
+        exam.description || ""
+      }`.toLowerCase();
+
+      return words.every((word) => haystack.includes(word));
+    });
+  }, [exams, statusFilter, normalizedQuery]);
+
+  const isFiltering = normalizedQuery !== "" || statusFilter !== "all";
+
+  const clearFilters = () => {
+    setQuery("");
+    setStatusFilter("all");
+    searchRef.current?.focus();
+  };
+
   return (
     <div className="page admin-dashboard">
       {/* =========================================
@@ -117,6 +123,19 @@ export default function AdminDashboard() {
             Create, manage, publish and monitor your exams.
           </p>
         </div>
+
+        <Link to="/admin/create-exam" className="btn create-exam-btn">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Create New Exam
+        </Link>
       </div>
 
       {/* =========================================
@@ -217,137 +236,6 @@ export default function AdminDashboard() {
       </div>
 
       {/* =========================================
-          CREATE EXAM
-      ========================================= */}
-
-      <section className="create-exam-section">
-        <div className="section-heading">
-          <div>
-            <h2>Create New Exam</h2>
-            <p>Set up the basic details for your next examination.</p>
-          </div>
-        </div>
-
-        <form className="create-exam-card" onSubmit={handleCreate}>
-          <div className="form-field form-field-full">
-            <label htmlFor="title">
-              Exam Title
-              <span>*</span>
-            </label>
-
-            <input
-              id="title"
-              name="title"
-              type="text"
-              placeholder="e.g. JavaScript Fundamentals"
-              value={form.title}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className="form-field form-field-full">
-            <label htmlFor="description">Description</label>
-
-            <textarea
-              id="description"
-              name="description"
-              placeholder="Briefly describe what this exam covers..."
-              value={form.description}
-              onChange={handleChange}
-              rows={3}
-            />
-          </div>
-
-          <div className="exam-settings-grid">
-            <div className="form-field">
-              <label htmlFor="durationMinutes">
-                Duration
-                <span>*</span>
-              </label>
-
-              <div className="input-with-suffix">
-                <input
-                  id="durationMinutes"
-                  name="durationMinutes"
-                  type="number"
-                  min="1"
-                  value={form.durationMinutes}
-                  onChange={handleChange}
-                  required
-                />
-                <span>min</span>
-              </div>
-            </div>
-
-            <div className="form-field">
-              <label htmlFor="marksPerQ">
-                Marks / Question
-                <span>*</span>
-              </label>
-
-              <input
-                id="marksPerQ"
-                name="marksPerQ"
-                type="number"
-                min="0"
-                step="0.5"
-                value={form.marksPerQ}
-                onChange={handleChange}
-                required
-              />
-            </div>
-
-            <div className="form-field">
-              <label htmlFor="negativeMarks">Negative Marks</label>
-
-              <input
-                id="negativeMarks"
-                name="negativeMarks"
-                type="number"
-                min="0"
-                step="0.25"
-                value={form.negativeMarks}
-                onChange={handleChange}
-              />
-            </div>
-          </div>
-
-          <div className="form-footer">
-            <span className="form-helper">
-              You can add questions after creating the exam.
-            </span>
-
-            <button
-              type="submit"
-              className="btn create-exam-btn"
-              disabled={creating}
-            >
-              {creating ? (
-                <>
-                  <span className="button-spinner" />
-                  Creating...
-                </>
-              ) : (
-                <>
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <line x1="12" y1="5" x2="12" y2="19" />
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
-                  Create Exam
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      </section>
-
-      {/* =========================================
           EXAMS
       ========================================= */}
 
@@ -360,10 +248,90 @@ export default function AdminDashboard() {
 
           {!loading && exams.length > 0 && (
             <span className="exam-count">
-              {exams.length} {exams.length === 1 ? "exam" : "exams"}
+              {isFiltering
+                ? `${filteredExams.length} of ${exams.length}`
+                : `${exams.length} ${
+                    exams.length === 1 ? "exam" : "exams"
+                  }`}
             </span>
           )}
         </div>
+
+        {/* =========================================
+            SEARCH BAR
+        ========================================= */}
+
+        {!loading && exams.length > 0 && (
+          <div className="exam-toolbar">
+            <div className="exam-search">
+              <svg
+                className="exam-search-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <line x1="16.5" y1="16.5" x2="21" y2="21" />
+              </svg>
+
+              <input
+                ref={searchRef}
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setQuery("");
+                }}
+                placeholder="Search exams by title or description"
+                aria-label="Search exams"
+              />
+
+              {query && (
+                <button
+                  type="button"
+                  className="exam-search-clear"
+                  onClick={() => {
+                    setQuery("");
+                    searchRef.current?.focus();
+                  }}
+                  aria-label="Clear search"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            <div className="exam-filter-group" role="group" aria-label="Filter by status">
+              {[
+                { value: "all", label: "All", count: exams.length },
+                { value: "published", label: "Published", count: publishedCount },
+                { value: "draft", label: "Drafts", count: draftCount },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`exam-filter-btn ${
+                    statusFilter === option.value ? "is-active" : ""
+                  }`}
+                  onClick={() => setStatusFilter(option.value)}
+                  aria-pressed={statusFilter === option.value}
+                >
+                  {option.label}
+                  <span className="exam-filter-count">{option.count}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div className="exam-grid">
@@ -393,12 +361,42 @@ export default function AdminDashboard() {
             <h3>No exams yet</h3>
 
             <p>
-              Create your first exam using the form above to get started.
+              Create your first exam using the button above to get started.
             </p>
+
+            <Link to="/admin/create-exam" className="btn create-exam-btn">
+              Create New Exam
+            </Link>
+          </div>
+        ) : filteredExams.length === 0 ? (
+          <div className="empty-state admin-empty-state">
+            <div className="empty-icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <line x1="16.5" y1="16.5" x2="21" y2="21" />
+              </svg>
+            </div>
+
+            <h3>No matching exams</h3>
+
+            <p>
+              {query
+                ? `Nothing matches “${query.trim()}”. Try a different word or clear the filters.`
+                : "No exams in this status yet."}
+            </p>
+
+            <button type="button" className="btn" onClick={clearFilters}>
+              Clear filters
+            </button>
           </div>
         ) : (
           <div className="exam-grid">
-            {exams.map((exam) => {
+            {filteredExams.map((exam) => {
               const questionCount = exam._count?.questions || 0;
               const isPublishing = publishingId === exam.id;
 

@@ -61,6 +61,48 @@ const getExamAdmin = async (req, res, next) => {
   }
 };
 
+// @route PUT /api/exams/:id   (ADMIN)
+// Rename / edit exam details (title, description, duration, marks, negative marks).
+// Only allowed while the exam is still a DRAFT (isPublished === false).
+// Once published, details are locked to keep already-attempted exams consistent.
+const updateExam = async (req, res, next) => {
+  try {
+    const exam = await prisma.exam.findUnique({ where: { id: req.params.id } });
+
+    if (!exam) return res.status(404).json({ message: "Exam not found" });
+    if (exam.createdById !== req.user.id) {
+      return res.status(403).json({ message: "Not your exam" });
+    }
+
+    if (exam.isPublished) {
+      return res.status(403).json({
+        message: "This exam is published. Unpublish it first if you need to make changes.",
+      });
+    }
+
+    const { title, description, durationMinutes, marksPerQ, negativeMarks } = req.body;
+
+    if (title !== undefined && !title.trim()) {
+      return res.status(400).json({ message: "title cannot be empty" });
+    }
+
+    const updated = await prisma.exam.update({
+      where: { id: exam.id },
+      data: {
+        ...(title !== undefined && { title: title.trim() }),
+        ...(description !== undefined && { description }),
+        ...(durationMinutes !== undefined && { durationMinutes: Number(durationMinutes) }),
+        ...(marksPerQ !== undefined && { marksPerQ: Number(marksPerQ) }),
+        ...(negativeMarks !== undefined && { negativeMarks: Number(negativeMarks) }),
+      },
+    });
+
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+};
+
 // @route PATCH /api/exams/:id/publish   (ADMIN)
 const publishExam = async (req, res, next) => {
   try {
@@ -85,4 +127,4 @@ const publishExam = async (req, res, next) => {
   }
 };
 
-module.exports = { createExam, listExams, getExamAdmin, publishExam };
+module.exports = { createExam, listExams, getExamAdmin, updateExam, publishExam };

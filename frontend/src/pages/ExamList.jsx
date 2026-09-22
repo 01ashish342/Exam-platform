@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/axios";
 
@@ -7,6 +7,11 @@ export default function ExamList() {
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const searchRef = useRef(null);
 
   useEffect(() => {
     let mounted = true;
@@ -47,6 +52,22 @@ export default function ExamList() {
     };
   }, []);
 
+  // Press "/" anywhere to jump into the search box.
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key !== "/") return;
+
+      const tag = document.activeElement?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+
+      event.preventDefault();
+      searchRef.current?.focus();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const stats = useMemo(() => {
     const completed = attempts.filter(
       (attempt) =>
@@ -79,6 +100,56 @@ export default function ExamList() {
       bestScore,
     };
   }, [exams, attempts]);
+
+  // Which exam ids the student has already attempted at least once.
+  const attemptedExamIds = useMemo(() => {
+    const ids = new Set();
+
+    attempts.forEach((attempt) => {
+      const examId = attempt.examId ?? attempt.exam?.id;
+      if (examId != null) ids.add(examId);
+    });
+
+    return ids;
+  }, [attempts]);
+
+  const notAttemptedCount = exams.filter(
+    (exam) => !attemptedExamIds.has(exam.id)
+  ).length;
+  const attemptedCount = exams.length - notAttemptedCount;
+
+  /* =========================================
+     SEARCH + FILTER (available exams)
+  ========================================= */
+
+  const normalizedQuery = query.trim().toLowerCase();
+
+  const filteredExams = useMemo(() => {
+    const words = normalizedQuery ? normalizedQuery.split(/\s+/) : [];
+
+    return exams.filter((exam) => {
+      const hasAttempted = attemptedExamIds.has(exam.id);
+
+      if (statusFilter === "attempted" && !hasAttempted) return false;
+      if (statusFilter === "not_attempted" && hasAttempted) return false;
+
+      if (words.length === 0) return true;
+
+      const haystack = `${exam.title || ""} ${
+        exam.description || ""
+      }`.toLowerCase();
+
+      return words.every((word) => haystack.includes(word));
+    });
+  }, [exams, statusFilter, normalizedQuery, attemptedExamIds]);
+
+  const isFiltering = normalizedQuery !== "" || statusFilter !== "all";
+
+  const clearFilters = () => {
+    setQuery("");
+    setStatusFilter("all");
+    searchRef.current?.focus();
+  };
 
   const getStatusClass = (status) => {
     const normalized = String(status || "").toUpperCase();
@@ -296,7 +367,7 @@ export default function ExamList() {
           AVAILABLE EXAMS
       ===================================================== */}
 
-      <section className="dashboard-section">
+      <section className="dashboard-section" id="available-exams">
         <div className="section-heading">
           <div>
             <h2>Available Mock Exams</h2>
@@ -307,133 +378,259 @@ export default function ExamList() {
 
           {exams.length > 0 && (
             <span className="section-count">
-              {exams.length} {exams.length === 1 ? "exam" : "exams"}
+              {isFiltering
+                ? `${filteredExams.length} of ${exams.length}`
+                : `${exams.length} ${exams.length === 1 ? "exam" : "exams"}`}
             </span>
           )}
         </div>
 
-        {exams.length > 0 ? (
-          <div className="exam-card-grid">
-            {exams.map((exam) => (
-              <article className="exam-card" key={exam.id}>
-                <div className="exam-card-top">
-                  <div className="exam-card-icon">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 0 4 22V4.5Z" />
-                      <path d="M4 18a2.5 2.5 0 0 1 2.5-2.5H20" />
-                    </svg>
-                  </div>
+        {/* =========================================
+            SEARCH BAR
+        ========================================= */}
 
-                  <span className="badge badge-info">Mock Test</span>
-                </div>
+        {exams.length > 0 && (
+          <div className="exam-toolbar">
+            <div className="exam-search">
+              <svg
+                className="exam-search-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <line x1="16.5" y1="16.5" x2="21" y2="21" />
+              </svg>
 
-                <div className="exam-card-content">
-                  <h3>{exam.title}</h3>
+              <input
+                ref={searchRef}
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setQuery("");
+                }}
+                placeholder="Search exams by title or description"
+                aria-label="Search exams"
+              />
 
-                  <p className="exam-description">
-                    {exam.description ||
-                      "Test your knowledge with this practice examination."}
-                  </p>
-                </div>
-
-                <div className="exam-meta-grid">
-                  <div className="exam-meta-item">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 0 4 22V4.5Z" />
-                      <path d="M4 18a2.5 2.5 0 0 1 2.5-2.5H20" />
-                    </svg>
-
-                    <div>
-                      <span>Questions</span>
-                      <strong>{exam._count?.questions ?? 0}</strong>
-                    </div>
-                  </div>
-
-                  <div className="exam-meta-item">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <circle cx="12" cy="12" r="9" />
-                      <polyline points="12 7 12 12 15 14" />
-                    </svg>
-
-                    <div>
-                      <span>Duration</span>
-                      <strong>{exam.durationMinutes} min</strong>
-                    </div>
-                  </div>
-
-                  <div className="exam-meta-item">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M12 1v22" />
-                      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6" />
-                    </svg>
-
-                    <div>
-                      <span>Total Marks</span>
-                      <strong>{exam.totalMarks}</strong>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="exam-card-footer">
-                  <span className="exam-footer-note">
-                    <span className="status-dot" />
-                    Ready to attempt
-                  </span>
-
-                  <Link
-                    className="btn exam-start-btn"
-                    to={`/exam/${exam.id}`}
+              {query && (
+                <button
+                  type="button"
+                  className="exam-search-clear"
+                  onClick={() => {
+                    setQuery("");
+                    searchRef.current?.focus();
+                  }}
+                  aria-label="Clear search"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
                   >
-                    Start Test
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <line x1="5" y1="12" x2="19" y2="12" />
-                      <polyline points="12 5 19 12 12 19" />
-                    </svg>
-                  </Link>
-                </div>
-              </article>
-            ))}
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            <div
+              className="exam-filter-group"
+              role="group"
+              aria-label="Filter by attempt status"
+            >
+              {[
+                { value: "all", label: "All", count: exams.length },
+                {
+                  value: "not_attempted",
+                  label: "Not Attempted",
+                  count: notAttemptedCount,
+                },
+                {
+                  value: "attempted",
+                  label: "Attempted",
+                  count: attemptedCount,
+                },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`exam-filter-btn ${
+                    statusFilter === option.value ? "is-active" : ""
+                  }`}
+                  onClick={() => setStatusFilter(option.value)}
+                  aria-pressed={statusFilter === option.value}
+                >
+                  {option.label}
+                  <span className="exam-filter-count">{option.count}</span>
+                </button>
+              ))}
+            </div>
           </div>
+        )}
+
+        {exams.length > 0 ? (
+          filteredExams.length > 0 ? (
+            <div className="exam-card-grid">
+              {filteredExams.map((exam) => {
+                const hasAttempted = attemptedExamIds.has(exam.id);
+
+                return (
+                  <article className="exam-card" key={exam.id}>
+                    <div className="exam-card-top">
+                      <div className="exam-card-icon">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 0 4 22V4.5Z" />
+                          <path d="M4 18a2.5 2.5 0 0 1 2.5-2.5H20" />
+                        </svg>
+                      </div>
+
+                      <span className="badge badge-info">
+                        {hasAttempted ? "Attempted" : "Mock Test"}
+                      </span>
+                    </div>
+
+                    <div className="exam-card-content">
+                      <h3>{exam.title}</h3>
+
+                      <p className="exam-description">
+                        {exam.description ||
+                          "Test your knowledge with this practice examination."}
+                      </p>
+                    </div>
+
+                    <div className="exam-meta-grid">
+                      <div className="exam-meta-item">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 0 4 22V4.5Z" />
+                          <path d="M4 18a2.5 2.5 0 0 1 2.5-2.5H20" />
+                        </svg>
+
+                        <div>
+                          <span>Questions</span>
+                          <strong>{exam._count?.questions ?? 0}</strong>
+                        </div>
+                      </div>
+
+                      <div className="exam-meta-item">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <circle cx="12" cy="12" r="9" />
+                          <polyline points="12 7 12 12 15 14" />
+                        </svg>
+
+                        <div>
+                          <span>Duration</span>
+                          <strong>{exam.durationMinutes} min</strong>
+                        </div>
+                      </div>
+
+                      <div className="exam-meta-item">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M12 1v22" />
+                          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6" />
+                        </svg>
+
+                        <div>
+                          <span>Total Marks</span>
+                          <strong>{exam.totalMarks}</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="exam-card-footer">
+                      <span className="exam-footer-note">
+                        <span className="status-dot" />
+                        {hasAttempted ? "Attempt again" : "Ready to attempt"}
+                      </span>
+
+                      <Link
+                        className="btn exam-start-btn"
+                        to={`/exam/${exam.id}`}
+                      >
+                        {hasAttempted ? "Retake Test" : "Start Test"}
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <line x1="5" y1="12" x2="19" y2="12" />
+                          <polyline points="12 5 19 12 12 19" />
+                        </svg>
+                      </Link>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <div className="empty-state-icon">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <line x1="16.5" y1="16.5" x2="21" y2="21" />
+                </svg>
+              </div>
+
+              <h3>No matching exams</h3>
+              <p>
+                {query
+                  ? `Nothing matches “${query.trim()}”. Try a different word or clear the filters.`
+                  : "No exams in this category yet."}
+              </p>
+
+              <button type="button" className="btn" onClick={clearFilters}>
+                Clear filters
+              </button>
+            </div>
+          )
         ) : (
           <div className="empty-state">
             <div className="empty-state-icon">
